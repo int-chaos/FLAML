@@ -161,8 +161,10 @@
 <span class="kn">import</span> <span class="nn">datetime</span>
 <span class="kn">import</span> <span class="nn">time</span>
 <span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">ray</span> <span class="kn">import</span> <span class="n">__version__</span> <span class="k">as</span> <span class="n">ray_version</span>
+    <span class="k">assert</span> <span class="n">ray_version</span> <span class="o">&gt;=</span> <span class="s1">&#39;1.0.0&#39;</span>
     <span class="kn">from</span> <span class="nn">ray.tune.analysis</span> <span class="kn">import</span> <span class="n">ExperimentAnalysis</span> <span class="k">as</span> <span class="n">EA</span>
-<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+<span class="k">except</span> <span class="p">(</span><span class="ne">ImportError</span><span class="p">,</span> <span class="ne">AssertionError</span><span class="p">):</span>
     <span class="kn">from</span> <span class="nn">.analysis</span> <span class="kn">import</span> <span class="n">ExperimentAnalysis</span> <span class="k">as</span> <span class="n">EA</span>
 <span class="kn">import</span> <span class="nn">logging</span>
 <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
@@ -208,7 +210,7 @@
 <span class="sd">        analysis = tune.run(</span>
 <span class="sd">            compute_with_config,</span>
 <span class="sd">            config={</span>
-<span class="sd">                &#39;x&#39;: tune.qloguniform(lower=1, upper=1000000, q=1),</span>
+<span class="sd">                &#39;x&#39;: tune.lograndint(lower=1, upper=1000000),</span>
 <span class="sd">                &#39;y&#39;: tune.randint(lower=1, upper=1000000)</span>
 <span class="sd">            },</span>
 <span class="sd">            metric=&#39;metric2minimize&#39;, mode=&#39;min&#39;,</span>
@@ -295,7 +297,7 @@
 <span class="sd">        analysis = tune.run(</span>
 <span class="sd">            compute_with_config,</span>
 <span class="sd">            config={</span>
-<span class="sd">                &#39;x&#39;: tune.qloguniform(lower=1, upper=1000000, q=1),</span>
+<span class="sd">                &#39;x&#39;: tune.lograndint(lower=1, upper=1000000),</span>
 <span class="sd">                &#39;y&#39;: tune.randint(lower=1, upper=1000000)</span>
 <span class="sd">            },</span>
 <span class="sd">            metric=&#39;metric2minimize&#39;, mode=&#39;min&#39;,</span>
@@ -420,8 +422,13 @@
             <span class="n">reduction_factor</span><span class="o">=</span><span class="n">reduction_factor</span><span class="p">,</span>
             <span class="n">config_constraints</span><span class="o">=</span><span class="n">config_constraints</span><span class="p">,</span>
             <span class="n">metric_constraints</span><span class="o">=</span><span class="n">metric_constraints</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">search_alg</span><span class="o">.</span><span class="n">set_search_properties</span><span class="p">(</span><span class="n">metric</span><span class="p">,</span> <span class="n">mode</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">metric</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">mode</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">metric</span> <span class="o">=</span> <span class="n">metric</span> <span class="ow">or</span> <span class="n">search_alg</span><span class="o">.</span><span class="n">metric</span>
+            <span class="n">mode</span> <span class="o">=</span> <span class="n">mode</span> <span class="ow">or</span> <span class="n">search_alg</span><span class="o">.</span><span class="n">mode</span>
     <span class="k">if</span> <span class="n">time_budget_s</span><span class="p">:</span>
-        <span class="n">search_alg</span><span class="o">.</span><span class="n">set_search_properties</span><span class="p">(</span><span class="n">metric</span><span class="p">,</span> <span class="n">mode</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="p">{</span>
+        <span class="n">search_alg</span><span class="o">.</span><span class="n">set_search_properties</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="p">{</span>
             <span class="s1">&#39;time_budget_s&#39;</span><span class="p">:</span> <span class="n">time_budget_s</span><span class="p">})</span>
     <span class="n">scheduler</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="k">if</span> <span class="n">report_intermediate_result</span><span class="p">:</span>
@@ -436,9 +443,11 @@
         <span class="k">if</span> <span class="n">reduction_factor</span><span class="p">:</span>
             <span class="n">params</span><span class="p">[</span><span class="s1">&#39;reduction_factor&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">reduction_factor</span>
         <span class="k">try</span><span class="p">:</span>
+            <span class="kn">from</span> <span class="nn">ray</span> <span class="kn">import</span> <span class="n">__version__</span> <span class="k">as</span> <span class="n">ray_version</span>
+            <span class="k">assert</span> <span class="n">ray_version</span> <span class="o">&gt;=</span> <span class="s1">&#39;1.0.0&#39;</span>
             <span class="kn">from</span> <span class="nn">ray.tune.schedulers</span> <span class="kn">import</span> <span class="n">ASHAScheduler</span>
             <span class="n">scheduler</span> <span class="o">=</span> <span class="n">ASHAScheduler</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">)</span>
-        <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+        <span class="k">except</span> <span class="p">(</span><span class="ne">ImportError</span><span class="p">,</span> <span class="ne">AssertionError</span><span class="p">):</span>
             <span class="k">pass</span>
     <span class="k">if</span> <span class="n">use_ray</span><span class="p">:</span>
         <span class="k">try</span><span class="p">:</span>
@@ -482,9 +491,9 @@
             <span class="n">result</span> <span class="o">=</span> <span class="n">training_function</span><span class="p">(</span><span class="n">trial_to_run</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">result</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
-                    <span class="n">tune</span><span class="o">.</span><span class="n">report</span><span class="p">(</span><span class="o">**</span><span class="n">result</span><span class="p">)</span>
+                    <span class="n">report</span><span class="p">(</span><span class="o">**</span><span class="n">result</span><span class="p">)</span>
                 <span class="k">else</span><span class="p">:</span>
-                    <span class="n">tune</span><span class="o">.</span><span class="n">report</span><span class="p">(</span><span class="n">_metric</span><span class="o">=</span><span class="n">result</span><span class="p">)</span>
+                    <span class="n">report</span><span class="p">(</span><span class="n">_metric</span><span class="o">=</span><span class="n">result</span><span class="p">)</span>
             <span class="n">_runner</span><span class="o">.</span><span class="n">stop_trial</span><span class="p">(</span><span class="n">trial_to_run</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">verbose</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">handlers</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
