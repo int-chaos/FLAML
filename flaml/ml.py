@@ -38,6 +38,7 @@ from .model import (
     SARIMAX,
     TransformersEstimator,
     TemporalFusionTransformer,
+    TransformersEstimatorModelSelection,
 )
 from .data import CLASSIFICATION, group_counts, TS_FORECAST, TS_VALUE_COL
 import logging
@@ -124,6 +125,8 @@ def get_estimator_class(task, estimator_name):
         estimator_class = TransformersEstimator
     elif estimator_name == "tft":
         estimator_class = TemporalFusionTransformer
+    elif estimator_name == "transformer_ms":
+        estimator_class = TransformersEstimatorModelSelection
     else:
         raise ValueError(
             estimator_name + " is not a built-in learner. "
@@ -220,6 +223,13 @@ def metric_loss_score(
 
 def is_in_sklearn_metric_name_set(metric_name):
     return metric_name.startswith("ndcg") or metric_name in sklearn_metric_name_set
+
+
+def is_min_metric(metric_name):
+    return (
+        metric_name in ["rmse", "mae", "mse", "log_loss", "mape"]
+        or huggingface_metric_to_mode.get(metric_name, None) == "min"
+    )
 
 
 def sklearn_metric_loss_score(
@@ -400,6 +410,7 @@ def get_val_loss(
     #     fit_kwargs['groups_val'] = groups_val
     #     fit_kwargs['X_val'] = X_val
     #     fit_kwargs['y_val'] = y_val
+
     estimator.fit(X_train, y_train, budget, **fit_kwargs)
     val_loss, metric_for_logging, pred_time, _ = _eval_estimator(
         config,
@@ -531,10 +542,6 @@ def evaluate_model_CV(
         else:
             metric = total_metric / n
     pred_time /= n
-    # budget -= time.time() - start_time
-    # if val_loss < best_val_loss and budget > budget_per_train:
-    #     estimator.cleanup()
-    #     estimator.fit(X_train_all, y_train_all, budget, **fit_kwargs)
     return val_loss, metric, train_time, pred_time
 
 
@@ -564,6 +571,12 @@ def compute_estimator(
         task=task,
         n_jobs=n_jobs,
     )
+
+    if isinstance(estimator, TransformersEstimator):
+        fit_kwargs["metric"] = eval_metric
+        fit_kwargs["X_val"] = X_val
+        fit_kwargs["y_val"] = y_val
+
     if "holdout" == eval_method:
         val_loss, metric_for_logging, train_time, pred_time = get_val_loss(
             config_dic,
@@ -594,6 +607,10 @@ def compute_estimator(
             log_training_metric=log_training_metric,
             fit_kwargs=fit_kwargs,
         )
+
+    if isinstance(estimator, TransformersEstimator):
+        del fit_kwargs["metric"], fit_kwargs["X_val"], fit_kwargs["y_val"]
+
     return estimator, val_loss, metric_for_logging, train_time, pred_time
 
 
@@ -607,6 +624,7 @@ def train_estimator(
     estimator_class=None,
     budget=None,
     fit_kwargs={},
+    eval_metric=None,
 ):
     start_time = time.time()
     estimator_class = estimator_class or get_estimator_class(task, estimator_name)
@@ -615,6 +633,9 @@ def train_estimator(
         task=task,
         n_jobs=n_jobs,
     )
+    if isinstance(estimator, TransformersEstimator):
+        fit_kwargs["metric"] = eval_metric
+
     if X_train is not None:
         train_time = estimator.fit(X_train, y_train, budget, **fit_kwargs)
     else:
@@ -627,7 +648,7 @@ def get_classification_objective(num_labels: int) -> str:
     if num_labels == 2:
         objective_name = "binary"
     else:
-        objective_name = "multi"
+        objective_name = "multiclass"
     return objective_name
 
 
